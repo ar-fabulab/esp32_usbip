@@ -1,0 +1,54 @@
+menu "Example Configuration"
+
+    config ESP_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name) for the example to connect to.
+
+    config ESP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for the example to use.
+
+    config ESP_MAXIMUM_RETRY
+        int "Maximum retry"
+        default 5
+        help
+            Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+
+        config EXAMPLE_IPV4
+            bool "IPV4"
+            default y
+    
+        config EXAMPLE_IPV6
+            bool "IPV6"
+            default n
+            select EXAMPLE_CONNECT_IPV6
+    
+        config EXAMPLE_PORT
+            int "Port"
+            range 0 65535
+            default 3240
+            help
+                Local port the example server will listen on.
+    
+        config EXAMPLE_KEEPALIVE_IDLE
+            int "TCP keep-alive idle time(s)"
+            default 5
+            help
+                Keep-alive idle time. In idle time without receiving any data from peer, will send keep-alive probe packet
+    
+        config EXAMPLE_KEEPALIVE_INTERVAL
+            int "TCP keep-alive interval time(s)"
+            default 5
+            help
+                Keep-alive probe packet interval time.
+    
+        config EXAMPLE_KEEPALIVE_COUNT
+            int "TCP keep-alive packet retry send counts"
+            default 3
+            help
+                Keep-alive probe packet retry count.
+endmenu

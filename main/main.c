@@ -54,7 +54,7 @@ void usb_host_client_event_cb(const usb_host_client_event_msg_t *event_msg, void
                 ESP_LOGI("", "PID 0x%x, VID 0x%x", device_desc->idProduct, device_desc->idVendor);
                 struct usbip_usb_device usbipdev = {
                     .path = "1",
-                    .busid = "1",
+                    .busid = "1-1",
                     .busnum = 1,
                     .devnum = 1,
                     .speed = 1,
@@ -64,7 +64,7 @@ void usb_host_client_event_cb(const usb_host_client_event_msg_t *event_msg, void
                     .bDeviceClass = device_desc->bDeviceClass,
                     .bDeviceSubClass = device_desc->bDeviceSubClass,
                     .bDeviceProtocol = device_desc->bDeviceProtocol,
-                    .bConfigurationValue = 0,
+                    .bConfigurationValue = 1,
                     .bNumConfigurations = device_desc->bNumConfigurations,
                     .bNumInterfaces = 1,
                     };

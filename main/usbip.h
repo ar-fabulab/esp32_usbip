@@ -31,5 +31,11 @@ struct usbip_usb_device {
 	uint8_t bNumInterfaces;
 } __attribute__((packed));
 
+struct usbip_exported_device {
+	int32_t status;
+	struct usbip_usb_device udev;
+	struct usbip_usb_interface uinf[];
+};
+
 
 void usbip_add_device(const struct usbip_usb_device *);

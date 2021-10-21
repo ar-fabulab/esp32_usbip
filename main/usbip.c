@@ -4,7 +4,7 @@
 #include "lwip/sockets.h"
 #include "esp_log.h"
 
-static struct usbip_usb_device udev;
+static struct usbip_exported_device edevg = {};
 
 #define __u32 uint32_t
 #define __s32 int32_t
@@ -57,7 +57,7 @@ struct op_common {
 #define OP_REP_DEVINFO	(OP_REPLY   | OP_DEVINFO)
 
 struct op_devinfo_request {
-	char busid[64];
+	char busid[SYSFS_BUS_ID_SIZE];
 } __attribute__((packed));
 
 struct op_devinfo_reply {
@@ -72,7 +72,7 @@ struct op_devinfo_reply {
 #define OP_REP_IMPORT   (OP_REPLY   | OP_IMPORT)
 
 struct op_import_request {
-	char busid[64];
+	char busid[SYSFS_BUS_ID_SIZE];
 } __attribute__((packed));
 
 struct op_import_reply {
@@ -386,7 +386,7 @@ int usbip_net_send_op_common(int sockfd, uint32_t code, uint32_t status)
 
 static int send_reply_devlist(int connfd)
 {
-	//struct usbip_exported_device *edev;
+	struct usbip_exported_device *edev = &edevg;
 	struct usbip_usb_device pdu_udev;
 	struct usbip_usb_interface pdu_uinf = {1,2,3,4};
 	struct op_devlist_reply reply;
@@ -430,7 +430,7 @@ static int send_reply_devlist(int connfd)
 	// 		continue;
 
 	//	dump_usb_device(&edev->udev);
-		memcpy(&pdu_udev, &udev, sizeof(pdu_udev));
+		memcpy(&pdu_udev, &edev->udev, sizeof(pdu_udev));
 		usbip_net_pack_usb_device(1, &pdu_udev);
 
 		rc = usbip_net_send(connfd, &pdu_udev, sizeof(pdu_udev));
@@ -490,7 +490,7 @@ int usbip_net_recv_op_common(int sockfd, uint16_t *code, int *status)
 
 	rc = usbip_net_recv(sockfd, &op_common, sizeof(op_common));
 	if (rc < 0) {
-		dbg("usbip_net_recv failed: %d", rc);
+		dbg("usbip_net_recv failed: %d, %d", rc, errno);
 		goto err;
 	}
 
@@ -529,6 +529,133 @@ err:
 	return -1;
 }
 
+int usbip_net_set_nodelay(int sockfd)
+{
+	const int val = 1;
+	int ret;
+
+	ret = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
+	if (ret < 0)
+		dbg("setsockopt: TCP_NODELAY");
+
+	return ret;
+}
+
+int usbip_export_device(struct usbip_exported_device *edev, int sockfd)
+{
+	char attr_name[] = "usbip_sockfd";
+	char sockfd_attr_path[SYSFS_PATH_MAX];
+	int size;
+	char sockfd_buff[30];
+	int ret = 0;
+
+	// if (edev->status != SDEV_ST_AVAILABLE) {
+	// 	dbg("device not available: %s", edev->udev.busid);
+	// 	switch (edev->status) {
+	// 	case SDEV_ST_ERROR:
+	// 		dbg("status SDEV_ST_ERROR");
+	// 		ret = ST_DEV_ERR;
+	// 		break;
+	// 	case SDEV_ST_USED:
+	// 		dbg("status SDEV_ST_USED");
+	// 		ret = ST_DEV_BUSY;
+	// 		break;
+	// 	default:
+	// 		dbg("status unknown: 0x%x", edev->status);
+	// 		ret = -1;
+	// 	}
+	// 	return ret;
+	// }
+
+	/* only the first interface is true */
+	// size = snprintf(sockfd_attr_path, sizeof(sockfd_attr_path), "%s/%s",
+	// 		edev->udev.path, attr_name);
+	// if (size < 0 || (unsigned int)size >= sizeof(sockfd_attr_path)) {
+	// 	err("exported device path length %i >= %lu or < 0", size,
+	// 	    (long unsigned)sizeof(sockfd_attr_path));
+	// 	return -1;
+	// }
+
+	// size = snprintf(sockfd_buff, sizeof(sockfd_buff), "%d\n", sockfd);
+	// if (size < 0 || (unsigned int)size >= sizeof(sockfd_buff)) {
+	// 	err("socket length %i >= %lu or < 0", size,
+	// 	    (long unsigned)sizeof(sockfd_buff));
+	// 	return -1;
+	// }
+
+	 info("connect: %s", edev->udev.busid);
+
+	return ret;
+}
+
+
+static int recv_request_import(int sockfd)
+{
+	struct op_import_request req;
+	struct usbip_exported_device *edev = &edevg;
+	struct usbip_usb_device pdu_udev;
+	//struct list_head *i;
+	int found = 0;
+	int status = ST_OK;
+	int rc;
+
+	memset(&req, 0, sizeof(req));
+info("stoff");
+	rc = usbip_net_recv(sockfd, &req, sizeof(req));
+    info("stuff");
+	if (rc < 0) {
+		dbg("usbip_net_recv failed: import request");
+		return -1;
+	}
+	PACK_OP_IMPORT_REQUEST(0, &req);
+
+	//list_for_each(i, &driver->edev_list) {
+	//	edev = list_entry(i, struct usbip_exported_device, node);
+	//	if (!strncmp(req.busid, edev->udev.busid, SYSFS_BUS_ID_SIZE)) {
+			info("found requested device: %s", req.busid);
+			found = 1;
+	//		break;
+	//	}
+//	}
+
+	if (found) {
+		/* should set TCP_NODELAY for usbip */
+		usbip_net_set_nodelay(sockfd);
+
+		/* export device needs a TCP/IP socket descriptor */
+		status = usbip_export_device(edev, sockfd);
+		if (status < 0)
+			status = ST_NA;
+	} else {
+		info("requested device not found: %s", req.busid);
+		status = ST_NODEV;
+	}
+
+	rc = usbip_net_send_op_common(sockfd, OP_REP_IMPORT, status);
+	if (rc < 0) {
+		dbg("usbip_net_send_op_common failed: %#0x", OP_REP_IMPORT);
+		return -1;
+	}
+
+	if (status) {
+		dbg("import request busid %s: failed", req.busid);
+		return -1;
+	}
+
+	memcpy(&pdu_udev, &edev->udev, sizeof(pdu_udev));
+	usbip_net_pack_usb_device(1, &pdu_udev);
+
+	rc = usbip_net_send(sockfd, &pdu_udev, sizeof(pdu_udev));
+	if (rc < 0) {
+		dbg("usbip_net_send failed: devinfo");
+		return -1;
+	}
+
+	dbg("import request busid %s: complete", req.busid);
+
+	return 0;
+}
+
 static int recv_pdu(int connfd)
 {
 	uint16_t code = OP_UNSPEC;
@@ -553,7 +680,7 @@ static int recv_pdu(int connfd)
 		ret = recv_request_devlist(connfd);
 		break;
 	case OP_REQ_IMPORT:
-	//	ret = recv_request_import(connfd);
+		ret = recv_request_import(connfd);
 		break;
 	case OP_REQ_DEVINFO:
 	default:
@@ -571,20 +698,20 @@ static int recv_pdu(int connfd)
 
 
 void usbip_add_device(const struct usbip_usb_device * dev) {
-    udev = *dev;
+    edevg.udev = *dev;
 }
 
 
 void do_tcp_task(const int sock)
 {
-    int len;
+    int rc;
    // char rx_buffer[128];
 
     do {
-        len = recv_pdu(sock);
-        if (len < 0) {
-            ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
-        } else if (len == 0) {
+        rc = recv_pdu(sock);
+        if (rc < 0) {
+            ESP_LOGE(TAG, "Error occurred during receiving: errno %d", rc);
+        } else if (rc == 0) {
             ESP_LOGW(TAG, "good");
         } else {
           //  rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
@@ -601,5 +728,5 @@ void do_tcp_task(const int sock)
             //     to_write -= written;
             // }
         }
-    } while (len >= 0);
+    } while (rc >= 0);
 }
